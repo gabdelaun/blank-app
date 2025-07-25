@@ -1,8 +1,9 @@
 import streamlit as st
 import json
+import os
 from collections import defaultdict
 
-# --- App Title and Password ---
+# --- App config ---
 st.set_page_config(page_title="n8n Workflow Classifier", layout="wide")
 st.title("🧠 n8n Workflow Classifier (Private)")
 
@@ -14,11 +15,51 @@ if password != "0123":
 
 st.success("Access granted ✅")
 
-# --- Initialize session storage ---
+# --- Constants and folders ---
+SAVE_FOLDER = "saved_workflows"
+os.makedirs(SAVE_FOLDER, exist_ok=True)
+
+# --- Initialize session state ---
 if "workflows" not in st.session_state:
     st.session_state.workflows = []
 
-# --- Upload Section ---
+    # Load previously saved workflows
+    for filename in os.listdir(SAVE_FOLDER):
+        if filename.endswith(".json"):
+            try:
+                with open(os.path.join(SAVE_FOLDER, filename), "r") as f:
+                    wf = json.load(f)
+                    nodes = wf.get("nodes", [])
+                    file_info = {
+                        "filename": filename,
+                        "nodes": nodes,
+                        "category": "Uncategorized",
+                        "subcategory": "Other"
+                    }
+
+                    # --- Rule-based Classification ---
+                    services = [node["type"].lower() for node in nodes]
+                    if any("slack" in s for s in services):
+                        file_info["category"] = "Internal Tools"
+                        file_info["subcategory"] = "Communication"
+                    elif any("hubspot" in s or "crm" in s for s in services):
+                        file_info["category"] = "Sales"
+                        file_info["subcategory"] = "CRM Sync"
+                    elif any("mailchimp" in s or "email" in s for s in services):
+                        file_info["category"] = "Marketing"
+                        file_info["subcategory"] = "Email Campaigns"
+                    elif any("zendesk" in s or "support" in s for s in services):
+                        file_info["category"] = "Customer Support"
+                        file_info["subcategory"] = "Ticketing"
+                    elif any("airtable" in s or "notion" in s for s in services):
+                        file_info["category"] = "Internal Tools"
+                        file_info["subcategory"] = "Data Tools"
+
+                    st.session_state.workflows.append(file_info)
+            except Exception as e:
+                st.error(f"❌ Failed to load {filename}: {str(e)}")
+
+# --- File uploader ---
 uploaded_files = st.file_uploader("Upload one or more n8n workflows (.json)", type="json", accept_multiple_files=True)
 
 if uploaded_files:
@@ -26,8 +67,15 @@ if uploaded_files:
         try:
             wf = json.load(file)
             nodes = wf.get("nodes", [])
+            filename = file.name
+            full_path = os.path.join(SAVE_FOLDER, filename)
+
+            # Save file permanently
+            with open(full_path, "w") as f:
+                json.dump(wf, f)
+
             file_info = {
-                "filename": file.name,
+                "filename": filename,
                 "nodes": nodes,
                 "category": "Uncategorized",
                 "subcategory": "Other"
