@@ -5,7 +5,7 @@ import json
 st.title("Private n8n Workflow Classifier")
 
 password = st.text_input("Enter password to continue", type="password")
-if password != "my_secret_password":
+if password != "0123":
     st.warning("Access denied. Please enter the correct password.")
     st.stop()
 
