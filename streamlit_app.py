@@ -69,3 +69,45 @@ for category, subcats in category_tree.items():
                         st.write("🧩 Nodes:")
                         for node in wf["nodes"]:
                             st.write(f"- **{node['name']}** ({node['type']})")
+
+# --- Initialize session storage ---
+if "workflows" not in st.session_state:
+    st.session_state.workflows = []
+
+# --- Upload logic ---
+uploaded_files = st.file_uploader("Upload one or more n8n workflows", type="json", accept_multiple_files=True)
+if uploaded_files:
+    for file in uploaded_files:
+        try:
+            wf = json.load(file)
+            nodes = wf.get("nodes", [])
+            file_info = {
+                "filename": file.name,
+                "nodes": nodes,
+                "category": "Uncategorized",
+                "subcategory": "Other"
+            }
+
+            # --- Rule-based classification ---
+            services = [node["type"].lower() for node in nodes]
+            if any("slack" in s for s in services):
+                file_info["category"] = "Internal Tools"
+                file_info["subcategory"] = "Communication"
+            elif any("hubspot" in s or "crm" in s for s in services):
+                file_info["category"] = "Sales"
+                file_info["subcategory"] = "CRM Sync"
+            elif any("mailchimp" in s or "email" in s for s in services):
+                file_info["category"] = "Marketing"
+                file_info["subcategory"] = "Email Campaigns"
+            elif any("zendesk" in s or "support" in s for s in services):
+                file_info["category"] = "Customer Support"
+                file_info["subcategory"] = "Ticketing"
+            elif any("airtable" in s or "notion" in s for s in services):
+                file_info["category"] = "Internal Tools"
+                file_info["subcategory"] = "Data Tools"
+
+            st.session_state.workflows.append(file_info)
+
+        except Exception as e:
+            st.error(f"Error reading {file.name}: {str(e)}")
+
