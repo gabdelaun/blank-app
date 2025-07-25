@@ -1,40 +1,71 @@
 import streamlit as st
 import json
+from collections import defaultdict
 
-# --- Basic Auth ---
-st.title("Private n8n Workflow Classifier")
+# --- Auth ---
+st.title("🧠 n8n Workflow Classifier (Private)")
 
-password = st.text_input("Enter password to continue", type="password")
+password = st.text_input("Enter password", type="password")
 if password != "0123":
-    st.warning("Access denied. Please enter the correct password.")
+    st.warning("Access denied.")
     st.stop()
 
-st.success("Access granted.")
+st.success("Access granted ✅")
 
-# --- Upload and Process Workflow ---
-uploaded_file = st.file_uploader("Upload a n8n workflow (.json)", type="json")
+# --- Storage ---
+workflow_data = []
 
-def classify_workflow(nodes):
-    services = [node['type'].lower() for node in nodes]
-    if any("slack" in s for s in services):
-        return "Internal Communication"
-    elif any("hubspot" in s or "crm" in s for s in services):
-        return "Sales"
-    elif any("mailchimp" in s or "email" in s for s in services):
-        return "Marketing"
-    elif any("zendesk" in s or "support" in s for s in services):
-        return "Customer Support"
-    else:
-        return "Uncategorized"
+# --- File Upload ---
+uploaded_files = st.file_uploader("Upload one or more n8n workflows", type="json", accept_multiple_files=True)
+if uploaded_files:
+    for file in uploaded_files:
+        try:
+            wf = json.load(file)
+            nodes = wf.get("nodes", [])
+            file_info = {
+                "filename": file.name,
+                "nodes": nodes,
+                "category": "Uncategorized",
+                "subcategory": "Other"
+            }
 
-if uploaded_file:
-    workflow = json.load(uploaded_file)
-    nodes = workflow.get("nodes", [])
-    
-    st.subheader("Workflow Summary")
-    st.write(f"📦 Nodes: {len(nodes)}")
-    for node in nodes:
-        st.write(f"- {node['name']} ({node['type']})")
-    
-    category = classify_workflow(nodes)
-    st.success(f"Predicted Category: **{category}**")
+            # --- Classification Logic ---
+            services = [node["type"].lower() for node in nodes]
+            if any("slack" in s for s in services):
+                file_info["category"] = "Internal Tools"
+                file_info["subcategory"] = "Communication"
+            elif any("hubspot" in s or "crm" in s for s in services):
+                file_info["category"] = "Sales"
+                file_info["subcategory"] = "CRM Sync"
+            elif any("mailchimp" in s or "email" in s for s in services):
+                file_info["category"] = "Marketing"
+                file_info["subcategory"] = "Email Campaigns"
+            elif any("zendesk" in s or "support" in s for s in services):
+                file_info["category"] = "Customer Support"
+                file_info["subcategory"] = "Ticketing"
+            elif any("airtable" in s or "notion" in s for s in services):
+                file_info["category"] = "Internal Tools"
+                file_info["subcategory"] = "Data Tools"
+
+            workflow_data.append(file_info)
+        except Exception as e:
+            st.error(f"Failed to read {file.name}: {str(e)}")
+
+# --- Group by Category/Subcategory ---
+category_tree = defaultdict(lambda: defaultdict(list))
+for wf in workflow_data:
+    category_tree[wf["category"]][wf["subcategory"]].append(wf)
+
+# --- Display Interactive Tree ---
+st.subheader("📂 Browse Workflows by Category")
+
+for category, subcats in category_tree.items():
+    with st.expander(f"📁 {category} ({sum(len(v) for v in subcats.values())} workflows)"):
+        for subcat, files in subcats.items():
+            with st.expander(f"📂 {subcat} ({len(files)} files)"):
+                for wf in files:
+                    with st.expander(f"📄 {wf['filename']}"):
+                        st.write(f"🔢 Node Count: {len(wf['nodes'])}")
+                        st.write("🧩 Nodes:")
+                        for node in wf["nodes"]:
+                            st.write(f"- **{node['name']}** ({node['type']})")
